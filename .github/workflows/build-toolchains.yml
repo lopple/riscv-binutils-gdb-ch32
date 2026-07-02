@@ -6,11 +6,11 @@ on:
       tag_name:
         description: Release tag to create
         required: true
-        default: xw-gcc8-8.2.0-4.2-pre.2
+        default: xw-gcc8-8.2.0-4.3-pre.1
       tool_version:
         description: Arduino package tool version
         required: true
-        default: 8.2.0-4.2
+        default: 8.2.0-4.3
       prerelease:
         description: Mark the GitHub release as prerelease
         required: true
@@ -25,7 +25,7 @@ permissions:
 
 env:
   XPACK_VERSION: 8.2.0-3.1
-  TOOL_VERSION_FALLBACK: 8.2.0-4.2
+  TOOL_VERSION_FALLBACK: 8.2.0-4.3
   XPACK_RELEASE_BASE: https://github.com/xpack-dev-tools/riscv-none-embed-gcc-xpack/releases/download/v8.2.0-3.1
 
 jobs:
@@ -67,6 +67,7 @@ jobs:
             --with-system-zlib
           make MAKEINFO=true -j"$(nproc)" all-binutils all-gas all-ld
           make MAKEINFO=true install-binutils install-gas install-ld
+          gcc "$root/packaging/xw_gcc_wrapper.c" -O2 -Wall -Wextra -o "$work/xw-gcc-wrapper.exe"
           "$prefix/bin/riscv-none-embed-as.exe" --version | head -1
 
       - name: Assemble Windows toolchain archive
@@ -98,6 +99,8 @@ jobs:
           if (Test-Path -LiteralPath $targetBin) {
             Copy-Item -Path (Join-Path $binutilsPrefix 'riscv-none-elf\bin\*') -Destination $targetBin -Force
           }
+          $wrapperExe = Join-Path $env:RUNNER_TEMP 'xw-windows-build\xw-gcc-wrapper.exe'
+          & (Join-Path $env:GITHUB_WORKSPACE 'packaging\Install-XwGccWrappers.ps1') -Prefix $prefix -WrapperExe $wrapperExe
 
           $smoke = Join-Path $work 'xw-smoke.s'
           Set-Content -LiteralPath $smoke -Encoding ASCII -Value @'
@@ -110,6 +113,12 @@ jobs:
           '@
           & (Join-Path $prefix 'bin\riscv-none-embed-as.exe') -march=rv32ecxw $smoke -o (Join-Path $work 'xw-smoke.o')
           & (Join-Path $prefix 'bin\riscv-none-embed-objdump.exe') -d -M xw (Join-Path $work 'xw-smoke.o')
+          $probe = Join-Path $work 'probe.c'
+          Set-Content -LiteralPath $probe -Encoding ASCII -Value 'int f(void) { return 0; }'
+          $gccExe = Join-Path $prefix 'bin\riscv-none-embed-gcc.exe'
+          & $gccExe -march=rv32ecxw -mabi=ilp32e -c $probe -o (Join-Path $work 'rv32ecxw.o')
+          & $gccExe -march=rv32imacxw -mabi=ilp32 -c $probe -o (Join-Path $work 'rv32imacxw.o')
+          & $gccExe -march=rv32ecxw -mabi=ilp32e -c $smoke -o (Join-Path $work 'xw-gcc-smoke.o')
 
           $archivePath = Join-Path $env:GITHUB_WORKSPACE $archiveName
           if (Test-Path -LiteralPath $archivePath) { Remove-Item -LiteralPath $archivePath -Force }
@@ -176,6 +185,7 @@ jobs:
             --with-system-zlib
           make MAKEINFO=true -j"$(nproc)" all-binutils all-gas all-ld
           make MAKEINFO=true install-binutils install-gas install-ld
+          cc "$GITHUB_WORKSPACE/packaging/xw_gcc_wrapper.c" -O2 -Wall -Wextra -o "$work/xw-gcc-wrapper"
 
           prefix="$work/$archive_root"
           cp -a "$xpack_prefix" "$prefix"
@@ -183,6 +193,7 @@ jobs:
           if [ -d "$prefix/riscv-none-embed/bin" ]; then
             cp -p "$binutils_prefix/riscv-none-elf/bin"/* "$prefix/riscv-none-embed/bin"/
           fi
+          bash "$GITHUB_WORKSPACE/packaging/install_xw_gcc_wrappers.sh" "$prefix" "$work/xw-gcc-wrapper"
 
           file "$prefix/bin/riscv-none-embed-gcc" \
             "$prefix/bin/riscv-none-embed-as" \
@@ -200,6 +211,10 @@ jobs:
           EOS
           "$prefix/bin/riscv-none-embed-as" -march=rv32ecxw "$work/xw-smoke.s" -o "$work/xw-smoke.o"
           "$prefix/bin/riscv-none-embed-objdump" -d -M xw "$work/xw-smoke.o"
+          echo 'int f(void) { return 0; }' > "$work/probe.c"
+          "$prefix/bin/riscv-none-embed-gcc" -march=rv32ecxw -mabi=ilp32e -c "$work/probe.c" -o "$work/rv32ecxw.o"
+          "$prefix/bin/riscv-none-embed-gcc" -march=rv32imacxw -mabi=ilp32 -c "$work/probe.c" -o "$work/rv32imacxw.o"
+          "$prefix/bin/riscv-none-embed-gcc" -march=rv32ecxw -mabi=ilp32e -c "$work/xw-smoke.s" -o "$work/xw-gcc-smoke.o"
 
           git clone --depth 1 --branch b003-gcc8-asm-stability-test.1 --recurse-submodules https://github.com/lopple/rv003usb.git "$work/rv003usb"
           curl -L https://github.com/lopple/rv003usb/releases/download/b003-gcc8-asm-stability-test.1/bootloader.bin -o "$work/release-bootloader.bin"
@@ -273,6 +288,7 @@ jobs:
             --with-system-zlib
           make MAKEINFO=true -j"$(sysctl -n hw.ncpu)" all-binutils all-gas all-ld
           make MAKEINFO=true install-binutils install-gas install-ld
+          cc "$GITHUB_WORKSPACE/packaging/xw_gcc_wrapper.c" -O2 -Wall -Wextra -o "$work/xw-gcc-wrapper"
 
           prefix="$work/$archive_root"
           ditto "$xpack_prefix" "$prefix"
@@ -280,6 +296,7 @@ jobs:
           if [ -d "$prefix/riscv-none-embed/bin" ]; then
             cp -p "$binutils_prefix/riscv-none-elf/bin"/* "$prefix/riscv-none-embed/bin"/
           fi
+          bash "$GITHUB_WORKSPACE/packaging/install_xw_gcc_wrappers.sh" "$prefix" "$work/xw-gcc-wrapper"
 
           cat > "$work/xw-smoke.s" <<'EOS'
           .option rvc
@@ -291,6 +308,10 @@ jobs:
           EOS
           "$prefix/bin/riscv-none-embed-as" -march=rv32ecxw "$work/xw-smoke.s" -o "$work/xw-smoke.o"
           "$prefix/bin/riscv-none-embed-objdump" -d -M xw "$work/xw-smoke.o"
+          echo 'int f(void) { return 0; }' > "$work/probe.c"
+          "$prefix/bin/riscv-none-embed-gcc" -march=rv32ecxw -mabi=ilp32e -c "$work/probe.c" -o "$work/rv32ecxw.o"
+          "$prefix/bin/riscv-none-embed-gcc" -march=rv32imacxw -mabi=ilp32 -c "$work/probe.c" -o "$work/rv32imacxw.o"
+          "$prefix/bin/riscv-none-embed-gcc" -march=rv32ecxw -mabi=ilp32e -c "$work/xw-smoke.s" -o "$work/xw-gcc-smoke.o"
 
           cd "$work"
           tar -czf "$GITHUB_WORKSPACE/$archive_name" "$archive_root"

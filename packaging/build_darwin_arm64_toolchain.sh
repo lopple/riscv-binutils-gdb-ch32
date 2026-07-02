@@ -74,6 +74,7 @@ export CXXFLAGS="$CFLAGS"
 make MAKEINFO=true -j"$(sysctl -n hw.ncpu)" all-gcc
 make MAKEINFO=true -j"$(sysctl -n hw.ncpu)" all-target-libgcc
 make MAKEINFO=true install-gcc install-target-libgcc
+cc "$repo_root/packaging/xw_gcc_wrapper.c" -O2 -Wall -Wextra -o "$work/xw-gcc-wrapper"
 
 curl -L "$XPACK_RELEASE_BASE/xpack-riscv-none-embed-gcc-$XPACK_VERSION-darwin-x64.tgz" -o "$work/xpack-darwin-x64.tgz"
 tar -xzf "$work/xpack-darwin-x64.tgz" -C "$xpack_extract"
@@ -89,6 +90,7 @@ cp -p "$binutils_prefix/bin"/riscv-none-embed-* "$prefix/bin"/
 cp -p "$binutils_prefix/riscv-none-elf/bin"/* "$prefix/riscv-none-elf/bin"/
 cp -a "$xpack_prefix/riscv-none-embed/include/." "$prefix/riscv-none-elf/include/"
 cp -a "$xpack_prefix/riscv-none-embed/lib/." "$prefix/riscv-none-elf/lib/"
+bash "$repo_root/packaging/install_xw_gcc_wrappers.sh" "$prefix" "$work/xw-gcc-wrapper"
 
 file "$prefix/bin/riscv-none-embed-gcc" \
   "$prefix/bin/riscv-none-embed-as" \
@@ -116,6 +118,10 @@ c.sh a0, 2(a1)
 EOS
 "$prefix/bin/riscv-none-embed-as" -march=rv32ecxw "$work/xw-smoke.s" -o "$work/xw-smoke.o"
 "$prefix/bin/riscv-none-embed-objdump" -d -M xw "$work/xw-smoke.o"
+echo 'int f(void) { return 0; }' > "$work/probe.c"
+"$prefix/bin/riscv-none-embed-gcc" -march=rv32ecxw -mabi=ilp32e -c "$work/probe.c" -o "$work/rv32ecxw.o"
+"$prefix/bin/riscv-none-embed-gcc" -march=rv32imacxw -mabi=ilp32 -c "$work/probe.c" -o "$work/rv32imacxw.o"
+"$prefix/bin/riscv-none-embed-gcc" -march=rv32ecxw -mabi=ilp32e -c "$work/xw-smoke.s" -o "$work/xw-gcc-smoke.o"
 
 unset CFLAGS CXXFLAGS
 git clone --depth 1 --branch b003-gcc8-asm-stability-test.1 --recurse-submodules https://github.com/lopple/rv003usb.git "$work/rv003usb"
