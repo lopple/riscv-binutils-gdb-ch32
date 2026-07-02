@@ -1,0 +1,261 @@
+name: Build CH32 xw toolchains
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: Release tag to create
+        required: true
+        default: xw-gcc8-8.2.0-4.0-pre.1
+      tool_version:
+        description: Arduino package tool version
+        required: true
+        default: 8.2.0-4.0
+      prerelease:
+        description: Mark the GitHub release as prerelease
+        required: true
+        type: boolean
+        default: true
+  push:
+    tags:
+      - xw-gcc8-*
+
+permissions:
+  contents: write
+
+env:
+  XPACK_VERSION: 8.2.0-3.1
+  TOOL_VERSION_FALLBACK: 8.2.0-4.0
+  XPACK_RELEASE_BASE: https://github.com/xpack-dev-tools/riscv-none-embed-gcc-xpack/releases/download/v8.2.0-3.1
+
+jobs:
+  build-windows-x64:
+    name: Build Windows x64 toolchain
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          path-type: inherit
+          update: false
+          install: >-
+            base-devel
+            bison
+            flex
+            make
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-zlib
+
+      - name: Build xw binutils
+        shell: msys2 {0}
+        run: |
+          set -euxo pipefail
+          root="$(cygpath -u "$GITHUB_WORKSPACE")"
+          work="$(cygpath -u "$RUNNER_TEMP")/xw-windows-build"
+          build="$work/build-binutils"
+          prefix="$work/xw-binutils"
+          mkdir -p "$build" "$prefix"
+          cd "$build"
+          "$root/configure" \
+            --target=riscv-none-elf \
+            --program-prefix=riscv-none-embed- \
+            --prefix="$prefix" \
+            --disable-nls \
+            --disable-werror \
+            --with-system-zlib
+          make MAKEINFO=true -j"$(nproc)" all-binutils all-gas all-ld
+          make MAKEINFO=true install-binutils install-gas install-ld
+          "$prefix/bin/riscv-none-embed-as.exe" --version | head -1
+
+      - name: Assemble Windows toolchain archive
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $archiveRoot = 'riscv-none-embed-gcc8-xw-windows-x64'
+          $archiveName = "$archiveRoot.zip"
+          $work = Join-Path $env:RUNNER_TEMP 'xw-windows-package'
+          $xpackZip = Join-Path $work 'xpack-riscv-none-embed-gcc-win32-x64.zip'
+          $xpackExtract = Join-Path $work 'xpack'
+          $prefix = Join-Path $work $archiveRoot
+          New-Item -ItemType Directory -Force -Path $work, $xpackExtract | Out-Null
+
+          $url = "$env:XPACK_RELEASE_BASE/xpack-riscv-none-embed-gcc-$env:XPACK_VERSION-win32-x64.zip"
+          Invoke-WebRequest -Uri $url -OutFile $xpackZip
+          Expand-Archive -LiteralPath $xpackZip -DestinationPath $xpackExtract
+
+          $gcc = Get-ChildItem -LiteralPath $xpackExtract -Recurse -Filter 'riscv-none-embed-gcc.exe' | Select-Object -First 1
+          if (-not $gcc) { throw 'riscv-none-embed-gcc.exe not found in xPack archive' }
+          $xpackPrefix = Split-Path -Parent (Split-Path -Parent $gcc.FullName)
+
+          New-Item -ItemType Directory -Force -Path $prefix | Out-Null
+          Get-ChildItem -LiteralPath $xpackPrefix | Copy-Item -Destination $prefix -Recurse -Force
+
+          $binutilsPrefix = Join-Path $env:RUNNER_TEMP 'xw-windows-build\xw-binutils'
+          Copy-Item -Path (Join-Path $binutilsPrefix 'bin\riscv-none-embed-*') -Destination (Join-Path $prefix 'bin') -Force
+          $targetBin = Join-Path $prefix 'riscv-none-embed\bin'
+          if (Test-Path -LiteralPath $targetBin) {
+            Copy-Item -Path (Join-Path $binutilsPrefix 'riscv-none-elf\bin\*') -Destination $targetBin -Force
+          }
+
+          $smoke = Join-Path $work 'xw-smoke.s'
+          Set-Content -LiteralPath $smoke -Encoding ASCII -Value @'
+          .option rvc
+          .text
+          c.lbu a0, 0(a1)
+          c.lhu a2, 2(a3)
+          c.sb a4, 1(a5)
+          c.sh a0, 2(a1)
+          '@
+          & (Join-Path $prefix 'bin\riscv-none-embed-as.exe') -march=rv32ecxw $smoke -o (Join-Path $work 'xw-smoke.o')
+          & (Join-Path $prefix 'bin\riscv-none-embed-objdump.exe') -d -M xw (Join-Path $work 'xw-smoke.o')
+
+          $archivePath = Join-Path $env:GITHUB_WORKSPACE $archiveName
+          if (Test-Path -LiteralPath $archivePath) { Remove-Item -LiteralPath $archivePath -Force }
+          Compress-Archive -LiteralPath $prefix -DestinationPath $archivePath -CompressionLevel Optimal
+          $hash = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLowerInvariant()
+          $size = (Get-Item -LiteralPath $archivePath).Length
+          $metadata = [ordered]@{
+            host = 'i686-mingw32'
+            archiveFileName = $archiveName
+            checksum = "SHA-256:$hash"
+            size = "$size"
+          }
+          $metadata | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $env:GITHUB_WORKSPACE 'metadata-windows-x64.json') -Encoding UTF8
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64-toolchain
+          path: |
+            riscv-none-embed-gcc8-xw-windows-x64.zip
+            metadata-windows-x64.json
+
+  build-darwin-x64:
+    name: Build Darwin x64 toolchain
+    runs-on: macos-13
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build xw binutils and assemble toolchain archive
+        shell: bash
+        run: |
+          set -euxo pipefail
+          archive_root="riscv-none-embed-gcc8-xw-darwin-x64"
+          archive_name="$archive_root.tgz"
+          work="$RUNNER_TEMP/xw-darwin-build"
+          mkdir -p "$work"
+
+          curl -L "$XPACK_RELEASE_BASE/xpack-riscv-none-embed-gcc-$XPACK_VERSION-darwin-x64.tgz" -o "$work/xpack.tgz"
+          mkdir -p "$work/xpack"
+          tar -xzf "$work/xpack.tgz" -C "$work/xpack"
+          gcc_path="$(find "$work/xpack" -type f -path '*/bin/riscv-none-embed-gcc' -print -quit)"
+          if [ -z "$gcc_path" ]; then
+            echo "riscv-none-embed-gcc not found in xPack archive" >&2
+            exit 1
+          fi
+          xpack_prefix="$(cd "$(dirname "$gcc_path")/.." && pwd)"
+
+          build="$work/build-binutils"
+          binutils_prefix="$work/xw-binutils"
+          mkdir -p "$build" "$binutils_prefix"
+          cd "$build"
+          "$GITHUB_WORKSPACE/configure" \
+            --target=riscv-none-elf \
+            --program-prefix=riscv-none-embed- \
+            --prefix="$binutils_prefix" \
+            --disable-nls \
+            --disable-werror \
+            --with-system-zlib
+          make MAKEINFO=true -j"$(sysctl -n hw.ncpu)" all-binutils all-gas all-ld
+          make MAKEINFO=true install-binutils install-gas install-ld
+
+          prefix="$work/$archive_root"
+          ditto "$xpack_prefix" "$prefix"
+          cp -p "$binutils_prefix/bin"/riscv-none-embed-* "$prefix/bin"/
+          if [ -d "$prefix/riscv-none-embed/bin" ]; then
+            cp -p "$binutils_prefix/riscv-none-elf/bin"/* "$prefix/riscv-none-embed/bin"/
+          fi
+
+          cat > "$work/xw-smoke.s" <<'EOS'
+          .option rvc
+          .text
+          c.lbu a0, 0(a1)
+          c.lhu a2, 2(a3)
+          c.sb a4, 1(a5)
+          c.sh a0, 2(a1)
+          EOS
+          "$prefix/bin/riscv-none-embed-as" -march=rv32ecxw "$work/xw-smoke.s" -o "$work/xw-smoke.o"
+          "$prefix/bin/riscv-none-embed-objdump" -d -M xw "$work/xw-smoke.o"
+
+          cd "$work"
+          tar -czf "$GITHUB_WORKSPACE/$archive_name" "$archive_root"
+          sha="$(shasum -a 256 "$GITHUB_WORKSPACE/$archive_name" | awk '{print $1}')"
+          size="$(wc -c < "$GITHUB_WORKSPACE/$archive_name" | tr -d ' ')"
+          python3 - <<EOF
+          import json
+          data = {
+              "host": "x86_64-apple-darwin",
+              "archiveFileName": "$archive_name",
+              "checksum": "SHA-256:$sha",
+              "size": "$size",
+          }
+          with open("$GITHUB_WORKSPACE/metadata-darwin-x64.json", "w", encoding="utf-8") as f:
+              json.dump(data, f, indent=2)
+              f.write("\\n")
+          EOF
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: darwin-x64-toolchain
+          path: |
+            riscv-none-embed-gcc8-xw-darwin-x64.tgz
+            metadata-darwin-x64.json
+
+  release:
+    name: Create prerelease and package index
+    runs-on: ubuntu-latest
+    needs:
+      - build-windows-x64
+      - build-darwin-x64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve release settings
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "TAG_NAME=${{ inputs.tag_name }}" >> "$GITHUB_ENV"
+            echo "TOOL_VERSION=${{ inputs.tool_version }}" >> "$GITHUB_ENV"
+            echo "PRERELEASE=${{ inputs.prerelease }}" >> "$GITHUB_ENV"
+          else
+            echo "TAG_NAME=${GITHUB_REF_NAME}" >> "$GITHUB_ENV"
+            echo "TOOL_VERSION=${TOOL_VERSION_FALLBACK}" >> "$GITHUB_ENV"
+            echo "PRERELEASE=true" >> "$GITHUB_ENV"
+          fi
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+
+      - name: Generate Arduino package index
+        shell: bash
+        run: |
+          python3 packaging/generate_package_index.py \
+            --repo "$GITHUB_REPOSITORY" \
+            --tag "$TAG_NAME" \
+            --tool-version "$TOOL_VERSION" \
+            --metadata-glob "release-assets/**/metadata-*.json" \
+            --output package_lopple_ch32_tools_index.json
+          python3 -m json.tool package_lopple_ch32_tools_index.json >/dev/null
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG_NAME }}
+          target_commitish: ${{ github.sha }}
+          name: CH32 xw GCC 8 toolchains ${{ env.TOOL_VERSION }}
+          prerelease: ${{ env.PRERELEASE }}
+          files: |
+            release-assets/**/*.zip
+            release-assets/**/*.tgz
+            package_lopple_ch32_tools_index.json
