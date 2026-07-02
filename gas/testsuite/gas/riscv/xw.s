@@ -1,0 +1,13 @@
+target:
+	c.lbu x8,31(x15)
+	c.lhu x9,62(x14)
+	c.sb x10,15(x13)
+	c.sh x11,30(x12)
+	c.lbusp x12,15(sp)
+	c.lhusp x13,30(sp)
+	c.sbsp x14,7(sp)
+	c.shsp x15,14(sp)
+	lbu x8,0(sp)
+	lhu x8,2(sp)
+	sb x8,3(sp)
+	sh x8,4(sp)
