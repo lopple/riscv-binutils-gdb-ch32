@@ -43,6 +43,7 @@ static const char * const *riscv_fpr_names;
 
 /* Other options.  */
 static int no_aliases;	/* If set disassemble as most general inst.  */
+static int xw;        /* If set decode WCH xw compressed instructions.  */
 
 static void
 set_default_riscv_dis_options (void)
@@ -50,6 +51,7 @@ set_default_riscv_dis_options (void)
   riscv_gpr_names = riscv_gpr_names_abi;
   riscv_fpr_names = riscv_fpr_names_abi;
   no_aliases = 0;
+  xw = 0;
 }
 
 static void
@@ -57,6 +59,8 @@ parse_riscv_dis_option (const char *option)
 {
   if (strcmp (option, "no-aliases") == 0)
     no_aliases = 1;
+  else if (strcmp (option, "xw") == 0)
+    xw = 1;
   else if (strcmp (option, "numeric") == 0)
     {
       riscv_gpr_names = riscv_gpr_names_numeric;
@@ -156,6 +160,18 @@ print_insn_args (const char *d, insn_t l, bfd_vma pc, disassemble_info *info)
 	    case 'o':
 	    case 'j':
 	      print (info->stream, "%d", (int)EXTRACT_RVC_IMM (l));
+	      break;
+	    case 'B':
+	      print (info->stream, "%d", (int)EXTRACT_RVC_XW_B_IMM (l));
+	      break;
+	    case 'H':
+	      print (info->stream, "%d", (int)EXTRACT_RVC_XW_H_IMM (l));
+	      break;
+	    case 'Y':
+	      print (info->stream, "%d", (int)EXTRACT_RVC_XW_BSP_IMM (l));
+	      break;
+	    case 'Z':
+	      print (info->stream, "%d", (int)EXTRACT_RVC_XW_HSP_IMM (l));
 	      break;
 	    case 'k':
 	      print (info->stream, "%d", (int)EXTRACT_RVC_LW_IMM (l));
@@ -426,6 +442,9 @@ riscv_disassemble_insn (bfd_vma memaddr, insn_t word, disassemble_info *info)
 	  /* Does the opcode match?  */
 	  if (! (op->match_func) (op, word))
 	    continue;
+	  /* Is this a WCH xw instruction and may we print it as such?  */
+	  if (!xw && (op->pinfo & INSN_XW))
+	    continue;
 	  /* Is this a pseudo-instruction and may we print it as such?  */
 	  if (no_aliases && (op->pinfo & INSN_ALIAS))
 	    continue;
@@ -548,6 +567,9 @@ with the -M switch (multiple options should be separated by commas):\n"));
   fprintf (stream, _("\n\
   no-aliases    Disassemble only into canonical instructions, rather\n\
                 than into pseudoinstructions.\n"));
+
+  fprintf (stream, _("\n\
+  xw            Enable WCH compressed instruction extension.\n"));
 
   fprintf (stream, _("\n"));
 }

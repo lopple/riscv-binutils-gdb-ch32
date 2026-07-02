@@ -579,6 +579,10 @@ validate_riscv_insn (const struct riscv_opcode *opc, int length)
 	  case 'l': used_bits |= ENCODE_RVC_LD_IMM (-1U); break;
 	  case 'm': used_bits |= ENCODE_RVC_LWSP_IMM (-1U); break;
 	  case 'n': used_bits |= ENCODE_RVC_LDSP_IMM (-1U); break;
+	  case 'B': used_bits |= ENCODE_RVC_XW_B_IMM (-1U); break;
+	  case 'H': used_bits |= ENCODE_RVC_XW_H_IMM (-1U); break;
+	  case 'Y': used_bits |= ENCODE_RVC_XW_BSP_IMM (-1U); break;
+	  case 'Z': used_bits |= ENCODE_RVC_XW_HSP_IMM (-1U); break;
 	  case 'p': used_bits |= ENCODE_RVC_B_IMM (-1U); break;
 	  case 's': USE_BITS (OP_MASK_CRS1S, OP_SH_CRS1S); break;
 	  case 't': USE_BITS (OP_MASK_CRS2S, OP_SH_CRS2S); break;
@@ -1560,6 +1564,46 @@ rvc_imm_done:
 		    break;
 		  ip->insn_opcode |=
 		    ENCODE_RVC_LDSP_IMM (imm_expr->X_add_number);
+		  goto rvc_imm_done;
+		case 'B':
+		  if (riscv_handle_implicit_zero_offset (imm_expr, s))
+		    continue;
+		  if (my_getSmallExpression (imm_expr, imm_reloc, s, p)
+		      || imm_expr->X_op != O_constant
+		      || !VALID_RVC_XW_B_IMM (imm_expr->X_add_number))
+		    break;
+		  ip->insn_opcode |=
+		    ENCODE_RVC_XW_B_IMM (imm_expr->X_add_number);
+		  goto rvc_imm_done;
+		case 'H':
+		  if (riscv_handle_implicit_zero_offset (imm_expr, s))
+		    continue;
+		  if (my_getSmallExpression (imm_expr, imm_reloc, s, p)
+		      || imm_expr->X_op != O_constant
+		      || !VALID_RVC_XW_H_IMM (imm_expr->X_add_number))
+		    break;
+		  ip->insn_opcode |=
+		    ENCODE_RVC_XW_H_IMM (imm_expr->X_add_number);
+		  goto rvc_imm_done;
+		case 'Y':
+		  if (riscv_handle_implicit_zero_offset (imm_expr, s))
+		    continue;
+		  if (my_getSmallExpression (imm_expr, imm_reloc, s, p)
+		      || imm_expr->X_op != O_constant
+		      || !VALID_RVC_XW_BSP_IMM (imm_expr->X_add_number))
+		    break;
+		  ip->insn_opcode |=
+		    ENCODE_RVC_XW_BSP_IMM (imm_expr->X_add_number);
+		  goto rvc_imm_done;
+		case 'Z':
+		  if (riscv_handle_implicit_zero_offset (imm_expr, s))
+		    continue;
+		  if (my_getSmallExpression (imm_expr, imm_reloc, s, p)
+		      || imm_expr->X_op != O_constant
+		      || !VALID_RVC_XW_HSP_IMM (imm_expr->X_add_number))
+		    break;
+		  ip->insn_opcode |=
+		    ENCODE_RVC_XW_HSP_IMM (imm_expr->X_add_number);
 		  goto rvc_imm_done;
 		case 'o':
 		  if (my_getSmallExpression (imm_expr, imm_reloc, s, p)

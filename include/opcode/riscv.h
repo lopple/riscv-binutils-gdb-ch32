@@ -95,6 +95,14 @@ static const char * const riscv_pred_succ[16] =
   ((RV_X(x, 9, 4) << 2) | (RV_X(x, 7, 2) << 6))
 #define EXTRACT_RVC_SDSP_IMM(x) \
   ((RV_X(x, 10, 3) << 3) | (RV_X(x, 7, 3) << 6))
+#define EXTRACT_RVC_XW_B_IMM(x) \
+  (RV_X(x, 12, 1) | (RV_X(x, 5, 2) << 1) | (RV_X(x, 10, 2) << 3))
+#define EXTRACT_RVC_XW_H_IMM(x) \
+  ((RV_X(x, 5, 2) << 1) | (RV_X(x, 10, 2) << 3) | (RV_X(x, 12, 1) << 5))
+#define EXTRACT_RVC_XW_BSP_IMM(x) \
+  (RV_X(x, 7, 4))
+#define EXTRACT_RVC_XW_HSP_IMM(x) \
+  ((RV_X(x, 8, 3) << 1) | (RV_X(x, 7, 1) << 4))
 #define EXTRACT_RVC_B_IMM(x) \
   ((RV_X(x, 3, 2) << 1) | (RV_X(x, 10, 2) << 3) | (RV_X(x, 2, 1) << 5) | (RV_X(x, 5, 2) << 6) | (-RV_X(x, 12, 1) << 8))
 #define EXTRACT_RVC_J_IMM(x) \
@@ -134,6 +142,14 @@ static const char * const riscv_pred_succ[16] =
   ((RV_X(x, 2, 4) << 9) | (RV_X(x, 6, 2) << 7))
 #define ENCODE_RVC_SDSP_IMM(x) \
   ((RV_X(x, 3, 3) << 10) | (RV_X(x, 6, 3) << 7))
+#define ENCODE_RVC_XW_B_IMM(x) \
+  ((RV_X(x, 0, 1) << 12) | (RV_X(x, 1, 2) << 5) | (RV_X(x, 3, 2) << 10))
+#define ENCODE_RVC_XW_H_IMM(x) \
+  ((RV_X(x, 1, 2) << 5) | (RV_X(x, 3, 2) << 10) | (RV_X(x, 5, 1) << 12))
+#define ENCODE_RVC_XW_BSP_IMM(x) \
+  (RV_X(x, 0, 4) << 7)
+#define ENCODE_RVC_XW_HSP_IMM(x) \
+  ((RV_X(x, 1, 3) << 8) | (RV_X(x, 4, 1) << 7))
 #define ENCODE_RVC_B_IMM(x) \
   ((RV_X(x, 1, 2) << 3) | (RV_X(x, 3, 2) << 10) | (RV_X(x, 5, 1) << 2) | (RV_X(x, 6, 2) << 5) | (RV_X(x, 8, 1) << 12))
 #define ENCODE_RVC_J_IMM(x) \
@@ -156,6 +172,10 @@ static const char * const riscv_pred_succ[16] =
 #define VALID_RVC_LDSP_IMM(x) (EXTRACT_RVC_LDSP_IMM(ENCODE_RVC_LDSP_IMM(x)) == (x))
 #define VALID_RVC_SWSP_IMM(x) (EXTRACT_RVC_SWSP_IMM(ENCODE_RVC_SWSP_IMM(x)) == (x))
 #define VALID_RVC_SDSP_IMM(x) (EXTRACT_RVC_SDSP_IMM(ENCODE_RVC_SDSP_IMM(x)) == (x))
+#define VALID_RVC_XW_B_IMM(x) (EXTRACT_RVC_XW_B_IMM(ENCODE_RVC_XW_B_IMM(x)) == (x))
+#define VALID_RVC_XW_H_IMM(x) (EXTRACT_RVC_XW_H_IMM(ENCODE_RVC_XW_H_IMM(x)) == (x))
+#define VALID_RVC_XW_BSP_IMM(x) (EXTRACT_RVC_XW_BSP_IMM(ENCODE_RVC_XW_BSP_IMM(x)) == (x))
+#define VALID_RVC_XW_HSP_IMM(x) (EXTRACT_RVC_XW_HSP_IMM(ENCODE_RVC_XW_HSP_IMM(x)) == (x))
 #define VALID_RVC_B_IMM(x) (EXTRACT_RVC_B_IMM(ENCODE_RVC_B_IMM(x)) == (x))
 #define VALID_RVC_J_IMM(x) (EXTRACT_RVC_J_IMM(ENCODE_RVC_J_IMM(x)) == (x))
 
@@ -353,6 +373,9 @@ struct riscv_opcode
 #define INSN_4_BYTE		0x00000030
 #define INSN_8_BYTE		0x00000040
 #define INSN_16_BYTE		0x00000050
+
+/* Instruction belongs to the WCH xw compressed extension.  */
+#define INSN_XW			0x00000100
 
 /* Instruction is actually a macro.  It should be ignored by the
    disassembler, and requires special treatment by the assembler.  */
