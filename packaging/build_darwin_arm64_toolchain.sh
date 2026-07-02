@@ -117,6 +117,7 @@ EOS
 "$prefix/bin/riscv-none-embed-as" -march=rv32ecxw "$work/xw-smoke.s" -o "$work/xw-smoke.o"
 "$prefix/bin/riscv-none-embed-objdump" -d -M xw "$work/xw-smoke.o"
 
+unset CFLAGS CXXFLAGS
 git clone --depth 1 --branch b003-gcc8-asm-stability-test.1 --recurse-submodules https://github.com/lopple/rv003usb.git "$work/rv003usb"
 curl -L https://github.com/lopple/rv003usb/releases/download/b003-gcc8-asm-stability-test.1/bootloader.bin -o "$work/release-bootloader.bin"
 cd "$work/rv003usb/bootloader"
