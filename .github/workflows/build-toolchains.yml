@@ -6,11 +6,11 @@ on:
       tag_name:
         description: Release tag to create
         required: true
-        default: xw-gcc8-8.2.0-4.4-pre.1
+        default: xw-gcc8-8.2.0-4.5-pre.1
       tool_version:
         description: Arduino package tool version
         required: true
-        default: 8.2.0-4.4
+        default: 8.2.0-4.5
       prerelease:
         description: Mark the GitHub release as prerelease
         required: true
@@ -25,7 +25,7 @@ permissions:
 
 env:
   XPACK_VERSION: 8.2.0-3.1
-  TOOL_VERSION_FALLBACK: 8.2.0-4.4
+  TOOL_VERSION_FALLBACK: 8.2.0-4.5
   XPACK_RELEASE_BASE: https://github.com/xpack-dev-tools/riscv-none-embed-gcc-xpack/releases/download/v8.2.0-3.1
 
 jobs:
@@ -68,6 +68,8 @@ jobs:
           make MAKEINFO=true -j"$(nproc)" all-binutils all-gas all-ld
           make MAKEINFO=true install-binutils install-gas install-ld
           gcc "$root/packaging/xw_gcc_wrapper.c" -O2 -Wall -Wextra -o "$work/xw-gcc-wrapper.exe"
+          mkdir -p "$work/runtime-dlls"
+          cp -p /mingw64/bin/zlib1.dll "$work/runtime-dlls/"
           "$prefix/bin/riscv-none-embed-as.exe" --version | head -1
 
       - name: Assemble Windows toolchain archive
@@ -99,9 +101,9 @@ jobs:
           if (Test-Path -LiteralPath $targetBin) {
             Copy-Item -Path (Join-Path $binutilsPrefix 'riscv-none-elf\bin\*') -Destination $targetBin -Force
           }
-          $mingwBin = 'C:\msys64\mingw64\bin'
+          $runtimeDllDir = Join-Path $env:RUNNER_TEMP 'xw-windows-build\runtime-dlls'
           foreach ($dll in @('zlib1.dll')) {
-            $dllPath = Join-Path $mingwBin $dll
+            $dllPath = Join-Path $runtimeDllDir $dll
             if (-not (Test-Path -LiteralPath $dllPath)) { throw "Required runtime DLL not found: $dllPath" }
             Copy-Item -LiteralPath $dllPath -Destination (Join-Path $prefix 'bin') -Force
             if (Test-Path -LiteralPath $targetBin) {
