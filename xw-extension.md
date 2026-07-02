@@ -53,6 +53,14 @@ The committed oracle harness is `xw-oracle/run_xw_oracle.py`. It records CSV/JSO
 
 The implementation was smoke-tested with the locally built `work\build-binutils-mingw64-nonls\gas\as-new.exe` and `work\build-binutils-mingw64-nonls\binutils\objdump.exe`.
 
+The RISC-V GAS DejaGnu tests were also run after installing MSYS2 `dejagnu 1.6.3-2`, `expect 5.45.4-6`, and `tcl 8.6.12-3`:
+
+```powershell
+& E:\toolchains\msys64\usr\bin\bash.exe -lc 'export PATH=/mingw64/bin:/usr/bin:$PATH; cd /d/projects/lopple/xw-reimplementation/work/build-binutils-mingw64-nonls/gas && make check-DEJAGNU RUNTESTFLAGS="riscv.exp"'
+```
+
+Result: `58` expected passes, `10` untested existing attribute cases, and no failures. The new `xw-invalid`, `xw-no-disasm`, `xw-noarch`, `xw-rv32ec`, `xw-rv32imac`, and `xw-rv32imafc` tests all passed.
+
 ## Difference from later standard compressed load/store work
 
 This is a WCH-specific `xw` extension. It uses encodings that overlap standard compressed floating-point load/store encodings when `xw` is not enabled. For that reason disassembly remains unchanged unless `-M xw` is specified.
