@@ -11,10 +11,19 @@ index 8f700eec8..489eff276 100644
  #include "diagnostic-core.h"
  #include "config/host-darwin.h"
  
-@@ -75,3 +77,7 @@ darwin_gt_pch_use_address (void *addr, size_t sz, int fd, size_t off)
+@@ -75,3 +77,16 @@ darwin_gt_pch_use_address (void *addr, size_t sz, int fd, size_t off)
  
    return ret;
  }
++
++/* GCC 8's Darwin PCH reservation path can ICE on modern Apple Silicon
++   hosts during ordinary C++ compilation.  The CH32 toolchain does not need
++   host-side PCH support, so keep the generic hooks for this native arm64
++   build.  */
++#undef HOST_HOOKS_GT_PCH_GET_ADDRESS
++#define HOST_HOOKS_GT_PCH_GET_ADDRESS default_gt_pch_get_address
++#undef HOST_HOOKS_GT_PCH_USE_ADDRESS
++#define HOST_HOOKS_GT_PCH_USE_ADDRESS default_gt_pch_use_address
 +
 +/* Generic Darwin hosts need the hook object itself.  Older GCC only provided
 +   this in architecture-specific Darwin wrappers.  */
