@@ -88,12 +88,16 @@ xpack_prefix="$(cd "$(dirname "$xpack_gcc")/.." && pwd)"
 mkdir -p "$prefix/bin" "$prefix/riscv-none-elf/bin" "$prefix/riscv-none-elf/include" "$prefix/riscv-none-elf/lib"
 cp -p "$binutils_prefix/bin"/riscv-none-embed-* "$prefix/bin"/
 cp -p "$binutils_prefix/riscv-none-elf/bin"/* "$prefix/riscv-none-elf/bin"/
+cp -p "$prefix/riscv-none-elf/bin/ld" "$prefix/bin/ld"
+cp -p "$prefix/riscv-none-elf/bin/ld.bfd" "$prefix/bin/ld.bfd"
 cp -a "$xpack_prefix/riscv-none-embed/include/." "$prefix/riscv-none-elf/include/"
 cp -a "$xpack_prefix/riscv-none-embed/lib/." "$prefix/riscv-none-elf/lib/"
 bash "$repo_root/packaging/install_xw_gcc_wrappers.sh" "$prefix" "$work/xw-gcc-wrapper"
 
 file "$prefix/bin/riscv-none-embed-gcc" \
   "$prefix/bin/riscv-none-embed-g++" \
+  "$prefix/bin/ld" \
+  "$prefix/bin/ld.bfd" \
   "$prefix/bin/riscv-none-embed-as" \
   "$prefix/bin/riscv-none-embed-ld" \
   "$prefix/bin/riscv-none-embed-objcopy" \
@@ -127,6 +131,7 @@ echo 'extern "C" int f(void) { return 0; }' > "$work/probe.cpp"
 "$prefix/bin/riscv-none-embed-gcc" -march=rv32ecxw -mabi=ilp32e -c "$work/xw-smoke.s" -o "$work/xw-gcc-smoke.o"
 "$prefix/bin/riscv-none-embed-g++" -march=rv32ecxw -mabi=ilp32e -fno-exceptions -fno-rtti -c "$work/probe.cpp" -o "$work/rv32ecxw-cxx.o"
 "$prefix/bin/riscv-none-embed-gcc" -x c++ -march=rv32ecxw -mabi=ilp32e -fno-exceptions -fno-rtti -c "$work/probe.cpp" -o "$work/rv32ecxw-gcc-x-cxx.o"
+"$prefix/bin/riscv-none-embed-g++" -march=rv32ecxw -mabi=ilp32e -nostdlib -nostartfiles "$work/rv32ecxw-cxx.o" -o "$work/rv32ecxw-cxx.elf"
 
 unset CFLAGS CXXFLAGS
 git clone --depth 1 --branch b003-gcc8-asm-stability-test.1 --recurse-submodules https://github.com/lopple/rv003usb.git "$work/rv003usb"
