@@ -156,11 +156,74 @@ make_real_path (const char *self)
 #endif
 }
 
+static char *
+get_dirname (const char *path)
+{
+  const char *last = NULL;
+  for (const char *p = path; *p != '\0'; ++p)
+    if (*p == '/'
+#ifdef _WIN32
+        || *p == '\\'
+#endif
+        )
+      last = p;
+
+  if (last == NULL)
+    return xstrdup (".");
+  if (last == path)
+    return xstrndup_local (path, 1);
+  return xstrndup_local (path, (size_t) (last - path));
+}
+
+static void
+prepend_env_path (const char *name, const char *dir)
+{
+  const char *old = getenv (name);
+#ifdef _WIN32
+  const char separator = ';';
+#else
+  const char separator = ':';
+#endif
+  size_t len = strlen (name) + 1 + strlen (dir) + 1;
+  if (old != NULL && old[0] != '\0')
+    len += strlen (old) + 1;
+
+  char *value = (char *) malloc (len);
+  if (value == NULL)
+    {
+      perror ("malloc");
+      exit (127);
+    }
+
+  if (old != NULL && old[0] != '\0')
+    snprintf (value, len, "%s=%s%c%s", name, dir, separator, old);
+  else
+    snprintf (value, len, "%s=%s", name, dir);
+
+#ifdef _WIN32
+  if (_putenv (value) != 0)
+    {
+      perror ("_putenv");
+      exit (127);
+    }
+#else
+  char *equals = strchr (value, '=');
+  *equals = '\0';
+  if (setenv (value, equals + 1, 1) != 0)
+    {
+      perror ("setenv");
+      exit (127);
+    }
+  free (value);
+#endif
+}
+
 int
 main (int argc, char **argv)
 {
   char *self = get_self_path ();
   char *real = make_real_path (self);
+  char *self_dir = get_dirname (self);
   char *xw_arch = NULL;
   bool print_only = false;
   char **new_argv = (char **) calloc ((size_t) argc + 3, sizeof (char *));
@@ -226,6 +289,8 @@ main (int argc, char **argv)
   if (xw_arch != NULL && !print_only)
     new_argv[out++] = make_wa_march (xw_arch);
   new_argv[out] = NULL;
+
+  prepend_env_path ("COMPILER_PATH", self_dir);
 
 #ifdef _WIN32
   intptr_t rc = _spawnv (_P_WAIT, real, (const char * const *) new_argv);
