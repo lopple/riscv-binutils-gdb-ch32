@@ -59,7 +59,7 @@ export CXXFLAGS="$CFLAGS"
   --with-newlib \
   --without-headers \
   --with-system-zlib \
-  --enable-languages=c,lto \
+  --enable-languages=c,c++,lto \
   --enable-lto \
   --enable-multilib \
   --disable-shared \
@@ -93,9 +93,11 @@ cp -a "$xpack_prefix/riscv-none-embed/lib/." "$prefix/riscv-none-elf/lib/"
 bash "$repo_root/packaging/install_xw_gcc_wrappers.sh" "$prefix" "$work/xw-gcc-wrapper"
 
 file "$prefix/bin/riscv-none-embed-gcc" \
+  "$prefix/bin/riscv-none-embed-g++" \
   "$prefix/bin/riscv-none-embed-as" \
   "$prefix/bin/riscv-none-embed-ld" \
   "$prefix/bin/riscv-none-embed-objcopy" \
+  "$prefix/libexec/gcc/riscv-none-elf/8.2.0/cc1plus" \
   "$prefix/libexec/gcc/riscv-none-elf/8.2.0/liblto_plugin.so"
 
 for arch in rv32e rv32ec rv32em rv32emc rv32eac rv32emac rv32imac rv32imc rv64imac; do
@@ -119,9 +121,12 @@ EOS
 "$prefix/bin/riscv-none-embed-as" -march=rv32ecxw "$work/xw-smoke.s" -o "$work/xw-smoke.o"
 "$prefix/bin/riscv-none-embed-objdump" -d -M xw "$work/xw-smoke.o"
 echo 'int f(void) { return 0; }' > "$work/probe.c"
+echo 'extern "C" int f(void) { return 0; }' > "$work/probe.cpp"
 "$prefix/bin/riscv-none-embed-gcc" -march=rv32ecxw -mabi=ilp32e -c "$work/probe.c" -o "$work/rv32ecxw.o"
 "$prefix/bin/riscv-none-embed-gcc" -march=rv32imacxw -mabi=ilp32 -c "$work/probe.c" -o "$work/rv32imacxw.o"
 "$prefix/bin/riscv-none-embed-gcc" -march=rv32ecxw -mabi=ilp32e -c "$work/xw-smoke.s" -o "$work/xw-gcc-smoke.o"
+"$prefix/bin/riscv-none-embed-g++" -march=rv32ecxw -mabi=ilp32e -fno-exceptions -fno-rtti -c "$work/probe.cpp" -o "$work/rv32ecxw-cxx.o"
+"$prefix/bin/riscv-none-embed-gcc" -x c++ -march=rv32ecxw -mabi=ilp32e -fno-exceptions -fno-rtti -c "$work/probe.cpp" -o "$work/rv32ecxw-gcc-x-cxx.o"
 
 unset CFLAGS CXXFLAGS
 git clone --depth 1 --branch b003-gcc8-asm-stability-test.1 --recurse-submodules https://github.com/lopple/rv003usb.git "$work/rv003usb"
